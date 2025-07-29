@@ -15,19 +15,19 @@ export class BackgroundJobService {
       return;
     }
 
-    console.log("🚀 Starting background job service - Alert computation every 30 seconds");
-    
-    // Run immediately on start
+    console.log(
+      "🚀 Starting background job service - Alert computation every 30 seconds",
+    );
+
     this.alertComputationService.computeAndStoreAlerts();
 
-    // Then run every 30 seconds
     this.intervalId = setInterval(async () => {
       try {
         await this.alertComputationService.computeAndStoreAlerts();
       } catch (error) {
         console.error("❌ Error in background alert computation:", error);
       }
-    }, 30000); // 30 seconds
+    }, 30000);
 
     this.isRunning = true;
   }

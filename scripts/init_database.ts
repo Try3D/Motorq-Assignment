@@ -66,7 +66,77 @@ async function initDatabase() {
       )
     `);
 
+    // Add vehicle authentication table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS vehicle_auth (
+        id SERIAL PRIMARY KEY,
+        vehicle_vin INTEGER NOT NULL,
+        api_key_hash VARCHAR(64) NOT NULL,
+        api_key_prefix VARCHAR(16) NOT NULL,
+        status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'active', 'suspended', 'revoked')),
+        provisioned_by VARCHAR(100),
+        provisioned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        last_used_at TIMESTAMP,
+        rate_limit_per_hour INTEGER DEFAULT 3600,
+        FOREIGN KEY (vehicle_vin) REFERENCES vehicles(vin),
+        UNIQUE(vehicle_vin),
+        UNIQUE(api_key_hash)
+      )
+    `);
+
+    // Add admin users table for fleet operators
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS admin_users (
+        id SERIAL PRIMARY KEY,
+        username VARCHAR(50) UNIQUE NOT NULL,
+        password_hash VARCHAR(64) NOT NULL,
+        role VARCHAR(20) DEFAULT 'fleet_manager' CHECK (role IN ('super_admin', 'fleet_manager', 'technician')),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        is_active BOOLEAN DEFAULT TRUE
+      )
+    `);
+
+    // Add vehicle request logs table for rate limiting
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS vehicle_request_logs (
+        id SERIAL PRIMARY KEY,
+        vehicle_vin INTEGER NOT NULL,
+        timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        endpoint VARCHAR(255) NOT NULL,
+        ip_address INET,
+        FOREIGN KEY (vehicle_vin) REFERENCES vehicles(vin)
+      )
+    `);
+
+    // Add index for efficient rate limiting queries
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_vehicle_request_logs_vin_timestamp 
+      ON vehicle_request_logs(vehicle_vin, timestamp DESC)
+    `);
+
+    // Add index for cleanup queries
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_vehicle_request_logs_timestamp 
+      ON vehicle_request_logs(timestamp)
+    `);
+
     console.log("✅ Database tables created successfully!");
+    
+    // Verify the vehicle_request_logs table was created
+    const tableCheck = await client.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'vehicle_request_logs'
+      )
+    `);
+    
+    if (tableCheck.rows[0].exists) {
+      console.log("✅ vehicle_request_logs table verified");
+    } else {
+      console.log("❌ vehicle_request_logs table NOT found");
+    }
+
   } catch (error) {
     console.error("❌ Error creating tables:", error);
   } finally {

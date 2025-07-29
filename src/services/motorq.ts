@@ -105,9 +105,6 @@ export class MotorqService {
         ],
       );
 
-      // Alert computation is now handled by background job service
-      // No longer computing alerts here
-
       return true;
     } catch (error) {
       console.error("Error adding telemetry:", error);

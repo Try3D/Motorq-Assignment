@@ -8,6 +8,7 @@ import fleetRoutes from "./routes/fleet";
 import vehicleRoutes from "./routes/vehicle";
 import telemetryRoutes from "./routes/telemetry";
 import alertRoutes from "./routes/alert";
+import adminRoutes from "./routes/admin";
 
 const app = express();
 const ms = new MotorqService();
@@ -37,6 +38,7 @@ app.use("/fleet", fleetRoutes);
 app.use("/vehicle", vehicleRoutes);
 app.use("/telemetry", telemetryRoutes);
 app.use("/alert", alertRoutes);
+app.use("/admin", adminRoutes);
 
 // Keep the main data endpoint in app.ts
 app.get("/data", async function (req: any, res: any) {

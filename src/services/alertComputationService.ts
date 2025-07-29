@@ -4,10 +4,10 @@ import { Alert } from "../types/Alert";
 export class AlertComputationService {
   async computeAndStoreAlerts(): Promise<void> {
     const client = await pool.connect();
-    
+
     try {
       console.log("🔍 Computing alerts for all fleets...");
-      
+
       // Get all vehicles with their latest telemetry
       const vehiclesWithTelemetry = await client.query(`
         WITH latest_telemetry AS (
@@ -39,7 +39,6 @@ export class AlertComputationService {
         const speed = parseFloat(vehicle.speed) || 0;
         const fuel = parseFloat(vehicle.fuel) || 0;
 
-        // Check for speed violations
         if (speed > 80) {
           const existingSpeedAlert = await client.query(
             `
@@ -66,7 +65,6 @@ export class AlertComputationService {
           }
         }
 
-        // Check for low fuel
         if (fuel < 15) {
           const existingFuelAlert = await client.query(
             `
@@ -93,7 +91,6 @@ export class AlertComputationService {
           }
         }
 
-        // Check for engine status alerts (if engine is off but vehicle was recently moving)
         if (vehicle.engine_status === "Off" && speed > 0) {
           const existingEngineAlert = await client.query(
             `
@@ -121,7 +118,6 @@ export class AlertComputationService {
         }
       }
 
-      // Store all new alerts
       for (const alert of newAlerts) {
         await client.query(
           `
@@ -148,9 +144,7 @@ export class AlertComputationService {
         console.log("ℹ️ No new alerts to store");
       }
 
-      // Auto-resolve old alerts that are no longer relevant
       await this.autoResolveOldAlerts(client);
-
     } catch (error) {
       console.error("❌ Error computing alerts:", error);
     } finally {
@@ -160,7 +154,6 @@ export class AlertComputationService {
 
   private async autoResolveOldAlerts(client: any): Promise<void> {
     try {
-      // Auto-resolve speed violation alerts if vehicle is no longer speeding
       const speedAlertsResolved = await client.query(`
         UPDATE alerts 
         SET is_resolved = TRUE, resolved_at = NOW()
@@ -175,7 +168,6 @@ export class AlertComputationService {
         )
       `);
 
-      // Auto-resolve fuel alerts if vehicle has been refueled
       const fuelAlertsResolved = await client.query(`
         UPDATE alerts 
         SET is_resolved = TRUE, resolved_at = NOW()
@@ -190,7 +182,9 @@ export class AlertComputationService {
         )
       `);
 
-      const totalResolved = (speedAlertsResolved.rowCount || 0) + (fuelAlertsResolved.rowCount || 0);
+      const totalResolved =
+        (speedAlertsResolved.rowCount || 0) +
+        (fuelAlertsResolved.rowCount || 0);
       if (totalResolved > 0) {
         console.log(`✅ Auto-resolved ${totalResolved} alerts`);
       }
