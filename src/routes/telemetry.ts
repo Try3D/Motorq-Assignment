@@ -17,8 +17,6 @@ router.post("/capture", async function (req, res) {
       vehicleId,
     } = req.body;
 
-    console.log(req.body);
-
     if (Math.abs(latitude) >= 1000 || Math.abs(longitude) >= 1000) {
       return res.status(400).json({
         error: "Latitude and longitude must be less than 1000",
@@ -51,8 +49,9 @@ router.post("/capture", async function (req, res) {
     }
 
     return res.json({
-      msg: "Successfully added a new telemetry for vehicle",
+      msg: "Successfully added telemetry for vehicle",
       vehicleId,
+      note: "Alerts will be computed by background service within 30 seconds",
     });
   } catch (error) {
     console.error("Error adding telemetry:", error);
@@ -129,6 +128,7 @@ router.post("/capture/batch", async function (req, res) {
     return res.json({
       msg: "Batch telemetry processing completed",
       results,
+      note: "Alerts will be computed by background service within 30 seconds",
     });
   } catch (error) {
     console.error("Error in batch telemetry:", error);

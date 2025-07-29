@@ -2,7 +2,6 @@ import { Owner } from "../types/Owner";
 import { Fleet } from "../types/Fleet";
 import { Vehicle } from "../types/Vehicle";
 import { Telemetry } from "../types/Telemetry";
-import { Alert } from "../types/Alert";
 import pool from "../database/connection";
 
 export class MotorqService {
@@ -106,7 +105,8 @@ export class MotorqService {
         ],
       );
 
-      await this.checkAndCreateAlerts(vehicleId, telemetry, client);
+      // Alert computation is now handled by background job service
+      // No longer computing alerts here
 
       return true;
     } catch (error) {
@@ -114,87 +114,6 @@ export class MotorqService {
       return false;
     } finally {
       client.release();
-    }
-  }
-
-  private async checkAndCreateAlerts(
-    vehicleId: number,
-    telemetry: Telemetry,
-    client: any,
-  ): Promise<void> {
-    const now = new Date();
-    const alerts: Alert[] = [];
-
-    if (telemetry.speed > 80) {
-      const existingSpeedAlert = await client.query(
-        `
-        SELECT id FROM alerts 
-        WHERE vehicle_vin = $1 AND alert_type = 'Speed Violation' 
-        AND is_resolved = FALSE 
-        AND triggered_at > NOW() - INTERVAL '5 minutes'
-      `,
-        [vehicleId],
-      );
-
-      if (existingSpeedAlert.rows.length === 0) {
-        alerts.push(
-          new Alert({
-            vehicleVin: vehicleId,
-            alertType: "Speed Violation",
-            severity: telemetry.speed > 100 ? "Critical" : "Warning",
-            message: `Vehicle ${vehicleId} is speeding at ${telemetry.speed} km/h (limit: 80 km/h)`,
-            thresholdValue: 80,
-            actualValue: telemetry.speed,
-            triggeredAt: now,
-          }),
-        );
-      }
-    }
-
-    if (telemetry.fuel < 15) {
-      const existingFuelAlert = await client.query(
-        `
-        SELECT id FROM alerts 
-        WHERE vehicle_vin = $1 AND alert_type = 'Low Fuel' 
-        AND is_resolved = FALSE 
-        AND triggered_at > NOW() - INTERVAL '10 minutes'
-      `,
-        [vehicleId],
-      );
-
-      if (existingFuelAlert.rows.length === 0) {
-        alerts.push(
-          new Alert({
-            vehicleVin: vehicleId,
-            alertType: "Low Fuel",
-            severity: telemetry.fuel < 5 ? "Critical" : "Warning",
-            message: `Vehicle ${vehicleId} has low fuel: ${telemetry.fuel}%`,
-            thresholdValue: 15,
-            actualValue: telemetry.fuel,
-            triggeredAt: now,
-          }),
-        );
-      }
-    }
-
-    for (const alert of alerts) {
-      await client.query(
-        `
-        INSERT INTO alerts (vehicle_vin, alert_type, severity, message, threshold_value, actual_value, triggered_at)
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
-      `,
-        [
-          alert.vehicleVin,
-          alert.alertType,
-          alert.severity,
-          alert.message,
-          alert.thresholdValue,
-          alert.actualValue,
-          alert.triggeredAt,
-        ],
-      );
-
-      console.log(`🚨 Alert generated: ${alert.message}`);
     }
   }
 
