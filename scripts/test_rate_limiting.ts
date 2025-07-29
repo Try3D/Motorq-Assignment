@@ -34,7 +34,6 @@ async function testRateLimiting() {
     return;
   }
 
-  // Now send rapid requests to trigger rate limiting
   console.log("🚀 Sending rapid requests to test rate limiting...");
 
   for (let i = 1; i <= 10; i++) {
@@ -70,7 +69,6 @@ async function testRateLimiting() {
         console.log("❌ Request failed:", result);
       }
 
-      // Small delay between requests
       await new Promise((resolve) => setTimeout(resolve, 100));
     } catch (error) {
       console.error(`❌ Request ${i} failed:`, error);

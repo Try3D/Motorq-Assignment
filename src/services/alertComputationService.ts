@@ -8,7 +8,6 @@ export class AlertComputationService {
     try {
       console.log("🔍 Computing alerts for all fleets...");
 
-      // Get all vehicles with their latest telemetry
       const vehiclesWithTelemetry = await client.query(`
         WITH latest_telemetry AS (
           SELECT DISTINCT ON (vehicle_vin) 

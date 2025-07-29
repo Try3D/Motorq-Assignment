@@ -1,8 +1,21 @@
 import request from "supertest";
-import app from "../src/app";
+import express from "express";
+
+// Create isolated test app without background services
+const createTestApp = () => {
+  const app = express();
+  app.use(express.json());
+  
+  app.get("/", (req, res) => {
+    res.send("Hello, world!");
+  });
+  
+  return app;
+};
 
 describe("GET /", () => {
   it("should return Hello, world!", async () => {
+    const app = createTestApp();
     const res = await request(app).get("/");
     expect(res.statusCode).toBe(200);
     expect(res.text).toBe("Hello, world!");

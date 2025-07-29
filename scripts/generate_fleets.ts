@@ -74,7 +74,6 @@ const VEHICLE_API_KEY = "veh_1_abc123def456789";
       engineStatus: "On",
       fuel: parseFloat(fuel.toFixed(2)),
       totalKm: parseFloat(totalKm.toFixed(2)),
-      // Ensure unique timestamps by adding milliseconds
       timestamp: new Date(Date.now() + i).toISOString(),
     };
 
@@ -106,7 +105,7 @@ const VEHICLE_API_KEY = "veh_1_abc123def456789";
             remaining: telemetryJson.headers.get("X-RateLimit-Remaining"),
             reset: telemetryJson.headers.get("X-RateLimit-Reset"),
           },
-          duplicate: response.msg?.includes('duplicate') || false,
+          duplicate: response.msg?.includes("duplicate") || false,
         });
       } else if (telemetryJson.status === 429) {
         rateLimitedCount++;
@@ -138,8 +137,7 @@ const VEHICLE_API_KEY = "veh_1_abc123def456789";
 
     i += 1;
 
-    // Much faster requests to trigger rate limiting
-    const baseDelay = 100; // Only 100ms delay (instead of 1000ms)
+    const baseDelay = 100;
     await sleep(baseDelay);
   }
 

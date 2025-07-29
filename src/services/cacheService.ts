@@ -1,4 +1,4 @@
-import { createClient, RedisClientType } from 'redis';
+import { createClient, RedisClientType } from "redis";
 
 export class CacheService {
   private static instance: CacheService;
@@ -19,35 +19,35 @@ export class CacheService {
 
     try {
       this.client = createClient({
-        url: process.env.REDIS_URL || 'redis://localhost:6379',
+        url: process.env.REDIS_URL || "redis://localhost:6379",
         socket: {
           connectTimeout: 5000,
         },
       });
 
-      this.client.on('error', (err) => {
-        console.error('❌ Redis Client Error:', err);
+      this.client.on("error", (err) => {
+        console.error("❌ Redis Client Error:", err);
         this.isConnected = false;
       });
 
-      this.client.on('connect', () => {
-        console.log('🔄 Connecting to Redis...');
+      this.client.on("connect", () => {
+        console.log("🔄 Connecting to Redis...");
       });
 
-      this.client.on('ready', () => {
-        console.log('✅ Redis client ready');
+      this.client.on("ready", () => {
+        console.log("✅ Redis client ready");
         this.isConnected = true;
       });
 
-      this.client.on('end', () => {
-        console.log('🔌 Redis connection ended');
+      this.client.on("end", () => {
+        console.log("🔌 Redis connection ended");
         this.isConnected = false;
       });
 
       await this.client.connect();
-      console.log('✅ Connected to Redis cache successfully');
+      console.log("✅ Connected to Redis cache successfully");
     } catch (error) {
-      console.warn('⚠️ Redis not available, cache disabled:', error);
+      console.warn("⚠️ Redis not available, cache disabled:", error);
       this.isConnected = false;
     }
   }
@@ -56,7 +56,7 @@ export class CacheService {
     if (this.client && this.isConnected) {
       await this.client.disconnect();
       this.isConnected = false;
-      console.log('🔌 Disconnected from Redis');
+      console.log("🔌 Disconnected from Redis");
     }
   }
 
@@ -72,12 +72,16 @@ export class CacheService {
       console.log(`💨 Cache MISS for key: ${key}`);
       return null;
     } catch (error) {
-      console.error('Cache get error:', error);
+      console.error("Cache get error:", error);
       return null;
     }
   }
 
-  async set(key: string, value: any, ttlSeconds: number = 300): Promise<boolean> {
+  async set(
+    key: string,
+    value: any,
+    ttlSeconds: number = 300,
+  ): Promise<boolean> {
     if (!this.isConnected || !this.client) return false;
 
     try {
@@ -85,7 +89,7 @@ export class CacheService {
       console.log(`💾 Cache SET for key: ${key}, TTL: ${ttlSeconds}s`);
       return true;
     } catch (error) {
-      console.error('Cache set error:', error);
+      console.error("Cache set error:", error);
       return false;
     }
   }
@@ -98,7 +102,7 @@ export class CacheService {
       console.log(`🗑️ Cache DELETE for key: ${key}, deleted: ${result}`);
       return result > 0;
     } catch (error) {
-      console.error('Cache delete error:', error);
+      console.error("Cache delete error:", error);
       return false;
     }
   }
@@ -110,7 +114,7 @@ export class CacheService {
       const result = await this.client.exists(key);
       return result === 1;
     } catch (error) {
-      console.error('Cache exists error:', error);
+      console.error("Cache exists error:", error);
       return false;
     }
   }
@@ -121,7 +125,7 @@ export class CacheService {
     try {
       return await this.client.keys(pattern);
     } catch (error) {
-      console.error('Cache keys error:', error);
+      console.error("Cache keys error:", error);
       return [];
     }
   }
@@ -132,31 +136,39 @@ export class CacheService {
     try {
       const keys = await this.client.keys(pattern);
       if (keys.length === 0) return 0;
-      
+
       const result = await this.client.del(keys);
-      console.log(`🧹 Cache invalidated ${result} keys matching pattern: ${pattern}`);
+      console.log(
+        `🧹 Cache invalidated ${result} keys matching pattern: ${pattern}`,
+      );
       return result;
     } catch (error) {
-      console.error('Cache invalidate pattern error:', error);
+      console.error("Cache invalidate pattern error:", error);
       return 0;
     }
   }
 
-  // Rate limiting with Redis - Sliding Window Algorithm
-  async checkRateLimit(key: string, limit: number, windowSeconds: number): Promise<{
+  async checkRateLimit(
+    key: string,
+    limit: number,
+    windowSeconds: number,
+  ): Promise<{
     allowed: boolean;
     count: number;
     resetTime: number;
   }> {
     if (!this.isConnected || !this.client) {
-      return { allowed: true, count: 0, resetTime: Date.now() + windowSeconds * 1000 };
+      return {
+        allowed: true,
+        count: 0,
+        resetTime: Date.now() + windowSeconds * 1000,
+      };
     }
 
     try {
       const now = Date.now();
-      const windowStart = now - (windowSeconds * 1000);
-      
-      // Use Redis Lua script for atomic sliding window rate limiting
+      const windowStart = now - windowSeconds * 1000;
+
       const luaScript = `
         local key = KEYS[1]
         local window_start = tonumber(ARGV[1])
@@ -182,34 +194,41 @@ export class CacheService {
           return {0, current_count}  -- not allowed, current_count
         end
       `;
-      
+
       const requestId = `${now}-${Math.random().toString(36).substr(2, 9)}`;
-      const result = await this.client.eval(luaScript, {
+      const result = (await this.client.eval(luaScript, {
         keys: [key],
         arguments: [
           windowStart.toString(),
-          now.toString(), 
+          now.toString(),
           limit.toString(),
           windowSeconds.toString(),
-          requestId
-        ]
-      }) as [number, number];
-      
+          requestId,
+        ],
+      })) as [number, number];
+
       const [allowed, count] = result;
-      
+
       return {
         allowed: allowed === 1,
         count: count,
-        resetTime: now + (windowSeconds * 1000)
+        resetTime: now + windowSeconds * 1000,
       };
     } catch (error) {
-      console.error('Rate limit check error:', error);
-      return { allowed: true, count: 0, resetTime: Date.now() + windowSeconds * 1000 };
+      console.error("Rate limit check error:", error);
+      return {
+        allowed: true,
+        count: 0,
+        resetTime: Date.now() + windowSeconds * 1000,
+      };
     }
   }
 
-  // Advanced sliding window with detailed analytics
-  async checkRateLimitWithAnalytics(key: string, limit: number, windowSeconds: number): Promise<{
+  async checkRateLimitWithAnalytics(
+    key: string,
+    limit: number,
+    windowSeconds: number,
+  ): Promise<{
     allowed: boolean;
     count: number;
     remaining: number;
@@ -219,20 +238,20 @@ export class CacheService {
     averageInterval?: number;
   }> {
     if (!this.isConnected || !this.client) {
-      return { 
-        allowed: true, 
-        count: 0, 
+      return {
+        allowed: true,
+        count: 0,
         remaining: limit,
         resetTime: Date.now() + windowSeconds * 1000,
         windowStart: Date.now() - windowSeconds * 1000,
-        requestTimes: []
+        requestTimes: [],
       };
     }
 
     try {
       const now = Date.now();
-      const windowStart = now - (windowSeconds * 1000);
-      
+      const windowStart = now - windowSeconds * 1000;
+
       const luaScript = `
         local key = KEYS[1]
         local window_start = tonumber(ARGV[1])
@@ -258,74 +277,80 @@ export class CacheService {
           return {0, current_count, request_times}
         end
       `;
-      
+
       const requestId = `${now}-${Math.random().toString(36).substr(2, 9)}`;
-      const result = await this.client.eval(luaScript, {
+      const result = (await this.client.eval(luaScript, {
         keys: [key],
         arguments: [
           windowStart.toString(),
-          now.toString(), 
+          now.toString(),
           limit.toString(),
           windowSeconds.toString(),
-          requestId
-        ]
-      }) as [number, number, string[]];
-      
+          requestId,
+        ],
+      })) as [number, number, string[]];
+
       const [allowed, count, requestTimesStr] = result;
-      const requestTimes = requestTimesStr.map(t => parseFloat(t)).filter(t => !isNaN(t)).sort();
-      
-      // Calculate average interval between requests
+      const requestTimes = requestTimesStr
+        .map((t) => parseFloat(t))
+        .filter((t) => !isNaN(t))
+        .sort();
+
       let averageInterval: number | undefined;
       if (requestTimes.length > 1) {
         const intervals = [];
         for (let i = 1; i < requestTimes.length; i++) {
-          intervals.push(requestTimes[i] - requestTimes[i-1]);
+          intervals.push(requestTimes[i] - requestTimes[i - 1]);
         }
-        averageInterval = intervals.reduce((a, b) => a + b, 0) / intervals.length;
+        averageInterval =
+          intervals.reduce((a, b) => a + b, 0) / intervals.length;
       }
-      
+
       return {
         allowed: allowed === 1,
         count: count,
         remaining: Math.max(0, limit - count),
-        resetTime: now + (windowSeconds * 1000),
+        resetTime: now + windowSeconds * 1000,
         windowStart: windowStart,
         requestTimes: requestTimes,
-        averageInterval
+        averageInterval,
       };
     } catch (error) {
-      console.error('Rate limit analytics check error:', error);
-      return { 
-        allowed: true, 
-        count: 0, 
+      console.error("Rate limit analytics check error:", error);
+      return {
+        allowed: true,
+        count: 0,
         remaining: limit,
         resetTime: Date.now() + windowSeconds * 1000,
         windowStart: Date.now() - windowSeconds * 1000,
-        requestTimes: []
+        requestTimes: [],
       };
     }
   }
 
-  // Get rate limit status without consuming a request
-  async getRateLimitStatus(key: string, limit: number, windowSeconds: number): Promise<{
+  async getRateLimitStatus(
+    key: string,
+    limit: number,
+    windowSeconds: number,
+  ): Promise<{
     count: number;
     remaining: number;
     resetTime: number;
     requestTimes: number[];
   }> {
     if (!this.isConnected || !this.client) {
-      return { 
-        count: 0, 
+      return {
+        count: 0,
         remaining: limit,
         resetTime: Date.now() + windowSeconds * 1000,
-        requestTimes: []
+        requestTimes: [],
       };
     }
 
     try {
       const now = Date.now();
-      const windowStart = now - (windowSeconds * 1000);
-      
+      const windowStart = now - windowSeconds * 1000;
+
       const luaScript = `
         local key = KEYS[1]
         local window_start = tonumber(ARGV[1])
@@ -339,28 +364,31 @@ export class CacheService {
         
         return {current_count, request_times}
       `;
-      
-      const result = await this.client.eval(luaScript, {
+
+      const result = (await this.client.eval(luaScript, {
         keys: [key],
-        arguments: [windowStart.toString()]
-      }) as [number, string[]];
-      
+        arguments: [windowStart.toString()],
+      })) as [number, string[]];
+
       const [count, requestTimesStr] = result;
-      const requestTimes = requestTimesStr.map(t => parseFloat(t)).filter(t => !isNaN(t)).sort();
-      
+      const requestTimes = requestTimesStr
+        .map((t) => parseFloat(t))
+        .filter((t) => !isNaN(t))
+        .sort();
+
       return {
         count: count,
         remaining: Math.max(0, limit - count),
-        resetTime: now + (windowSeconds * 1000),
-        requestTimes: requestTimes
+        resetTime: now + windowSeconds * 1000,
+        requestTimes: requestTimes,
       };
     } catch (error) {
-      console.error('Rate limit status check error:', error);
-      return { 
-        count: 0, 
+      console.error("Rate limit status check error:", error);
+      return {
+        count: 0,
         remaining: limit,
         resetTime: Date.now() + windowSeconds * 1000,
-        requestTimes: []
+        requestTimes: [],
       };
     }
   }
@@ -369,23 +397,22 @@ export class CacheService {
     if (!this.isConnected || !this.client) return { connected: false };
 
     try {
-      const info = await this.client.info('memory');
+      const info = await this.client.info("memory");
       const dbSize = await this.client.dbSize();
-      
+
       return {
         connected: this.isConnected,
         dbSize,
         memoryInfo: info,
-        timestamp: new Date()
+        timestamp: new Date(),
       };
     } catch (error: any) {
-      console.error('Cache stats error:', error);
+      console.error("Cache stats error:", error);
       return { connected: false, error: error.message };
     }
   }
 }
 
-// Cache key generators
 export class CacheKeys {
   static fleetAnalytics(fleetId: number): string {
     return `fleet:${fleetId}:analytics`;
