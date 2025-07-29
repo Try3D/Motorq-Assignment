@@ -12,7 +12,7 @@ interface VehicleProps {
   telemetryData: Telemetry[];
 }
 
-export abstract class Vehicle {
+export class Vehicle {
   vin: number;
   manufacturer: Manufacturer;
   fleetId: number;

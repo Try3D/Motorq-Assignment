@@ -1,6 +1,6 @@
 type Coordinate = {
-  x: number;
-  y: number;
+  latitude: number;
+  longitude: number;
 };
 
 type EngineStatus = "On" | "Off" | "Idle";
