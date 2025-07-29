@@ -68,7 +68,7 @@ router.post("/capture", telemetryRateLimit.middleware, async function (req: Auth
 
     if (!added) {
       return res.json({
-        msg: "Could not add",
+        msg: "Could not add telemetry - possible duplicate or error",
         vehicleId: actualVehicleId,
       });
     }
@@ -77,6 +77,7 @@ router.post("/capture", telemetryRateLimit.middleware, async function (req: Auth
       msg: "Successfully added telemetry for vehicle",
       vehicleId: actualVehicleId,
       authenticatedAs: req.vehicle?.vin,
+      timestamp: new Date(),
       note: "Alerts will be computed by background service within 30 seconds",
     });
   } catch (error) {
@@ -101,6 +102,7 @@ router.post("/capture/batch", batchRateLimit.middleware, async function (req: Au
 
     const results = [];
     const authenticatedVin = req.vehicle?.vin;
+    let duplicatesSkipped = 0;
 
     for (const data of telemetryData) {
       const {
@@ -111,6 +113,7 @@ router.post("/capture/batch", batchRateLimit.middleware, async function (req: Au
         fuel,
         totalKm,
         vehicleId,
+        timestamp, // Allow custom timestamp in batch mode
       } = data;
 
       // Verify each telemetry data point is for the authenticated vehicle
@@ -144,6 +147,8 @@ router.post("/capture/batch", batchRateLimit.middleware, async function (req: Au
       }
 
       try {
+        const telemetryTimestamp = timestamp ? new Date(timestamp) : new Date();
+        
         const added = await telemetryService.addTelemetry(
           actualVehicleId,
           new Telemetry({
@@ -152,15 +157,26 @@ router.post("/capture/batch", batchRateLimit.middleware, async function (req: Au
             engineStatus,
             fuel,
             totalKm,
-            timeStamp: new Date(),
+            timeStamp: telemetryTimestamp,
           }),
         );
 
-        results.push({
-          vehicleId: actualVehicleId,
-          success: added,
-          error: added ? null : "Could not add telemetry",
-        });
+        if (added) {
+          results.push({
+            vehicleId: actualVehicleId,
+            success: true,
+            timestamp: telemetryTimestamp,
+            error: null,
+          });
+        } else {
+          duplicatesSkipped++;
+          results.push({
+            vehicleId: actualVehicleId,
+            success: true, // Still success, just skipped
+            skipped: true,
+            error: "Duplicate timestamp - telemetry skipped",
+          });
+        }
       } catch (error) {
         results.push({
           vehicleId: actualVehicleId,
@@ -174,7 +190,8 @@ router.post("/capture/batch", batchRateLimit.middleware, async function (req: Au
       msg: "Batch telemetry processing completed",
       authenticatedAs: authenticatedVin,
       batchSize: telemetryData.length,
-      successfulCount: results.filter(r => r.success).length,
+      successfulCount: results.filter(r => r.success && !r.skipped).length,
+      duplicatesSkipped,
       results,
       note: "Alerts will be computed by background service within 30 seconds",
     });

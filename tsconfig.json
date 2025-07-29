@@ -16,7 +16,7 @@
   },
   "include": [
     "src/**/*"
-  ],
+, "tests/middleware", "tests/routes", "tests/services"  ],
   "exclude": [
     "node_modules",
     "dist",

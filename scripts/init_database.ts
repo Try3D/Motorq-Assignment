@@ -45,7 +45,8 @@ async function initDatabase() {
         total_km DECIMAL(10, 2) NOT NULL,
         timestamp TIMESTAMP NOT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (vehicle_vin) REFERENCES vehicles(vin)
+        FOREIGN KEY (vehicle_vin) REFERENCES vehicles(vin),
+        UNIQUE(vehicle_vin, timestamp)
       )
     `);
 

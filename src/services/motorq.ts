@@ -3,8 +3,15 @@ import { Fleet } from "../types/Fleet";
 import { Vehicle } from "../types/Vehicle";
 import { Telemetry } from "../types/Telemetry";
 import pool from "../database/connection";
+import { CacheService, CacheKeys } from "./cacheService";
 
 export class MotorqService {
+  private cache: CacheService;
+
+  constructor() {
+    this.cache = CacheService.getInstance();
+  }
+
   async addOwner(owner: Owner): Promise<boolean> {
     const client = await pool.connect();
     try {
@@ -75,45 +82,6 @@ export class MotorqService {
       client.release();
     }
   }
-
-  async addTelemetry(
-    vehicleId: number,
-    telemetry: Telemetry,
-  ): Promise<boolean> {
-    const client = await pool.connect();
-    try {
-      const vehicleResult = await client.query(
-        "SELECT vin FROM vehicles WHERE vin = $1",
-        [vehicleId],
-      );
-
-      if (vehicleResult.rows.length === 0) {
-        return false;
-      }
-
-      await client.query(
-        "INSERT INTO telemetry (vehicle_vin, latitude, longitude, speed, engine_status, fuel, total_km, timestamp) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
-        [
-          vehicleId,
-          telemetry.gps.latitude,
-          telemetry.gps.longitude,
-          telemetry.speed,
-          telemetry.engineStatus,
-          telemetry.fuel,
-          telemetry.totalKm,
-          telemetry.timeStamp,
-        ],
-      );
-
-      return true;
-    } catch (error) {
-      console.error("Error adding telemetry:", error);
-      return false;
-    } finally {
-      client.release();
-    }
-  }
-
   async getAllData(): Promise<any> {
     const client = await pool.connect();
     try {
@@ -223,6 +191,14 @@ export class MotorqService {
   }
 
   async getFleetAnalytics(fleetId: number): Promise<any> {
+    const cacheKey = CacheKeys.fleetAnalytics(fleetId);
+    
+    // Try to get from cache first
+    const cachedData = await this.cache.get(cacheKey);
+    if (cachedData) {
+      return { ...cachedData, fromCache: true };
+    }
+
     const client = await pool.connect();
     try {
       const fleetResult = await client.query(
@@ -289,7 +265,7 @@ export class MotorqService {
       const averageFuel =
         vehicleCount > 0 ? (totalFuel / vehicleCount).toFixed(2) : "0";
 
-      return {
+      const analytics = {
         fleetId: fleet.fleet_id,
         fleetType: fleet.fleet_type,
         ownerId: fleet.owner_id,
@@ -297,7 +273,13 @@ export class MotorqService {
         averageFuelLevel: parseFloat(averageFuel),
         totalFleetDistance: parseFloat(totalDistance.toFixed(2)),
         lastUpdated: new Date(),
+        fromCache: false,
       };
+
+      // Cache for 5 minutes
+      await this.cache.set(cacheKey, analytics, 300);
+
+      return analytics;
     } catch (error) {
       console.error("Error getting fleet analytics:", error);
       return { error: "Failed to get fleet analytics" };
@@ -307,6 +289,13 @@ export class MotorqService {
   }
 
   async getFleetDistance24Hours(fleetId: number): Promise<any> {
+    const cacheKey = CacheKeys.fleetDistance24h(fleetId);
+    
+    const cachedData = await this.cache.get(cacheKey);
+    if (cachedData) {
+      return { ...cachedData, fromCache: true };
+    }
+
     const client = await pool.connect();
     try {
       const result = await client.query(
@@ -339,12 +328,18 @@ export class MotorqService {
         };
       });
 
-      return {
+      const distanceData = {
         fleetId,
         totalDistance24h: parseFloat(totalDistance24h.toFixed(2)),
         vehicleDistances,
         timeframe: "24 hours",
+        fromCache: false,
       };
+
+      // Cache for 10 minutes
+      await this.cache.set(cacheKey, distanceData, 600);
+
+      return distanceData;
     } catch (error) {
       console.error("Error getting 24h distance:", error);
       return { error: "Failed to get 24h distance data" };
@@ -354,6 +349,13 @@ export class MotorqService {
   }
 
   async getFleetAlerts(fleetId: number): Promise<any> {
+    const cacheKey = CacheKeys.fleetAlerts(fleetId);
+    
+    const cachedData = await this.cache.get(cacheKey);
+    if (cachedData) {
+      return { ...cachedData, fromCache: true };
+    }
+
     const client = await pool.connect();
     try {
       const result = await client.query(
@@ -391,7 +393,7 @@ export class MotorqService {
         alertsByType[row.alert_type as keyof typeof alertsByType]++;
       });
 
-      return {
+      const alertsData = {
         fleetId,
         alertSummary: {
           ...alertSummary,
@@ -412,31 +414,16 @@ export class MotorqService {
           resolvedAt: row.resolved_at,
         })),
         generatedAt: new Date(),
+        fromCache: false,
       };
+
+      // Cache for 2 minutes (alerts change frequently)
+      await this.cache.set(cacheKey, alertsData, 120);
+
+      return alertsData;
     } catch (error) {
       console.error("Error getting fleet alerts:", error);
       return { error: "Failed to get fleet alerts" };
-    } finally {
-      client.release();
-    }
-  }
-
-  async resolveAlert(alertId: number): Promise<boolean> {
-    const client = await pool.connect();
-    try {
-      const result = await client.query(
-        `
-        UPDATE alerts 
-        SET is_resolved = TRUE, resolved_at = NOW() 
-        WHERE id = $1 AND is_resolved = FALSE
-      `,
-        [alertId],
-      );
-
-      return result.rowCount !== null && result.rowCount > 0;
-    } catch (error) {
-      console.error("Error resolving alert:", error);
-      return false;
     } finally {
       client.release();
     }
@@ -471,7 +458,35 @@ export class MotorqService {
     }
   }
 
+  async resolveAlert(alertId: number): Promise<boolean> {
+    const client = await pool.connect();
+    try {
+      const result = await client.query(
+        `
+        UPDATE alerts 
+        SET is_resolved = TRUE, resolved_at = NOW() 
+        WHERE id = $1 AND is_resolved = FALSE
+        `,
+        [alertId],
+      );
+
+      return result.rowCount !== null && result.rowCount > 0;
+    } catch (error) {
+      console.error("Error resolving alert:", error);
+      return false;
+    } finally {
+      client.release();
+    }
+  }
+
   async getAllVehicles(): Promise<any> {
+    const cacheKey = CacheKeys.allVehicles();
+    
+    const cachedData = await this.cache.get(cacheKey);
+    if (cachedData) {
+      return { ...cachedData, fromCache: true };
+    }
+
     const client = await pool.connect();
     try {
       const result = await client.query(`
@@ -483,7 +498,7 @@ export class MotorqService {
         ORDER BY v.vin
       `);
 
-      return {
+      const vehiclesData = {
         vehicles: result.rows.map((row) => ({
           vin: row.vin,
           manufacturer: row.manufacturer,
@@ -492,7 +507,13 @@ export class MotorqService {
           fleetType: row.fleet_type,
           ownerId: row.owner_id,
         })),
+        fromCache: false,
       };
+
+      // Cache for 10 minutes
+      await this.cache.set(cacheKey, vehiclesData, 600);
+
+      return vehiclesData;
     } catch (error) {
       console.error("Error getting all vehicles:", error);
       return { error: "Failed to get vehicles" };
@@ -501,75 +522,14 @@ export class MotorqService {
     }
   }
 
-  async getVehiclesByFleet(fleetId: number): Promise<any> {
-    const client = await pool.connect();
-    try {
-      const fleetResult = await client.query(
-        "SELECT fleet_id FROM fleets WHERE fleet_id = $1",
-        [fleetId],
-      );
-
-      if (fleetResult.rows.length === 0) {
-        return { error: "Fleet not found" };
-      }
-
-      const result = await client.query(
-        `
-        SELECT vin, manufacturer, fleet_id, registration_status
-        FROM vehicles 
-        WHERE fleet_id = $1
-        ORDER BY vin
-      `,
-        [fleetId],
-      );
-
-      return {
-        fleetId,
-        vehicles: result.rows.map((row) => ({
-          vin: row.vin,
-          manufacturer: row.manufacturer,
-          fleetId: row.fleet_id,
-          registrationStatus: row.registration_status,
-        })),
-      };
-    } catch (error) {
-      console.error("Error getting fleet vehicles:", error);
-      return { error: "Failed to get fleet vehicles" };
-    } finally {
-      client.release();
-    }
-  }
-
-  async deleteVehicle(vehicleId: number): Promise<boolean> {
-    const client = await pool.connect();
-    try {
-      await client.query("BEGIN");
-
-      await client.query("DELETE FROM telemetry WHERE vehicle_vin = $1", [
-        vehicleId,
-      ]);
-
-      await client.query("DELETE FROM alerts WHERE vehicle_vin = $1", [
-        vehicleId,
-      ]);
-
-      const result = await client.query("DELETE FROM vehicles WHERE vin = $1", [
-        vehicleId,
-      ]);
-
-      await client.query("COMMIT");
-
-      return result.rowCount !== null && result.rowCount > 0;
-    } catch (error) {
-      await client.query("ROLLBACK");
-      console.error("Error deleting vehicle:", error);
-      return false;
-    } finally {
-      client.release();
-    }
-  }
-
   async getLatestTelemetry(vehicleId: number): Promise<any> {
+    const cacheKey = CacheKeys.vehicleLatestTelemetry(vehicleId);
+    
+    const cachedData = await this.cache.get(cacheKey);
+    if (cachedData) {
+      return { ...cachedData, fromCache: true };
+    }
+
     const client = await pool.connect();
     try {
       const vehicleResult = await client.query(
@@ -597,7 +557,7 @@ export class MotorqService {
       }
 
       const row = result.rows[0];
-      return {
+      const telemetryData = {
         vehicleId,
         telemetry: {
           gps: { latitude: row.latitude, longitude: row.longitude },
@@ -607,7 +567,13 @@ export class MotorqService {
           totalKm: row.total_km,
           timeStamp: row.timestamp,
         },
+        fromCache: false,
       };
+
+      // Cache for 30 seconds (telemetry updates frequently)
+      await this.cache.set(cacheKey, telemetryData, 30);
+
+      return telemetryData;
     } catch (error) {
       console.error("Error getting latest telemetry:", error);
       return { error: "Failed to get latest telemetry" };
@@ -654,6 +620,170 @@ export class MotorqService {
     } catch (error) {
       console.error("Error getting telemetry history:", error);
       return { error: "Failed to get telemetry history" };
+    } finally {
+      client.release();
+    }
+  }
+
+  async deleteVehicle(vehicleId: number): Promise<boolean> {
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+
+      await client.query("DELETE FROM telemetry WHERE vehicle_vin = $1", [
+        vehicleId,
+      ]);
+
+      await client.query("DELETE FROM alerts WHERE vehicle_vin = $1", [
+        vehicleId,
+      ]);
+
+      const result = await client.query("DELETE FROM vehicles WHERE vin = $1", [
+        vehicleId,
+      ]);
+
+      await client.query("COMMIT");
+
+      return result.rowCount !== null && result.rowCount > 0;
+    } catch (error) {
+      await client.query("ROLLBACK");
+      console.error("Error deleting vehicle:", error);
+      return false;
+    } finally {
+      client.release();
+    }
+  }
+
+  async addTelemetry(vehicleId: number, telemetry: Telemetry): Promise<boolean> {
+    const result = await this.addTelemetryToDatabase(vehicleId, telemetry);
+    
+    if (result) {
+      // Invalidate related cache entries
+      await this.cache.del(CacheKeys.vehicleLatestTelemetry(vehicleId));
+      await this.cache.del(CacheKeys.vehicleTelemetryHistory(vehicleId));
+      
+      // Get vehicle's fleet and invalidate fleet caches
+      const client = await pool.connect();
+      try {
+        const vehicleResult = await client.query(
+          "SELECT fleet_id FROM vehicles WHERE vin = $1",
+          [vehicleId]
+        );
+        
+        if (vehicleResult.rows.length > 0) {
+          const fleetId = vehicleResult.rows[0].fleet_id;
+          await this.cache.del(CacheKeys.fleetAnalytics(fleetId));
+          await this.cache.del(CacheKeys.fleetDistance24h(fleetId));
+        }
+      } catch (error) {
+        console.error("Error invalidating fleet cache:", error);
+      } finally {
+        client.release();
+      }
+    }
+    
+    return result;
+  }
+
+  private async addTelemetryToDatabase(vehicleId: number, telemetry: Telemetry): Promise<boolean> {
+    const client = await pool.connect();
+    try {
+      const vehicleResult = await client.query(
+        "SELECT vin FROM vehicles WHERE vin = $1",
+        [vehicleId],
+      );
+
+      if (vehicleResult.rows.length === 0) {
+        return false;
+      }
+
+      const existingTelemetry = await client.query(
+        "SELECT id FROM telemetry WHERE vehicle_vin = $1 AND timestamp = $2",
+        [vehicleId, telemetry.timeStamp]
+      );
+
+      if (existingTelemetry.rows.length > 0) {
+        console.log(`⚠️ Duplicate telemetry detected for vehicle ${vehicleId} at ${telemetry.timeStamp}. Skipping insertion.`);
+        return true;
+      }
+
+      await client.query(
+        "INSERT INTO telemetry (vehicle_vin, latitude, longitude, speed, engine_status, fuel, total_km, timestamp) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
+        [
+          vehicleId,
+          telemetry.gps.latitude,
+          telemetry.gps.longitude,
+          telemetry.speed,
+          telemetry.engineStatus,
+          telemetry.fuel,
+          telemetry.totalKm,
+          telemetry.timeStamp,
+        ],
+      );
+
+      return true;
+    } catch (error: any) {
+      if (error.code === '23505' && error.constraint === 'unique_vehicle_timestamp') {
+        console.log(`⚠️ Duplicate telemetry prevented by database constraint for vehicle ${vehicleId} at ${telemetry.timeStamp}`);
+        return true;
+      }
+      
+      console.error("Error adding telemetry:", error);
+      return false;
+    } finally {
+      client.release();
+    }
+  }
+
+  async getVehiclesByFleet(fleetId: number): Promise<any> {
+    const cacheKey = CacheKeys.fleetVehicles(fleetId);
+    
+    const cachedData = await this.cache.get(cacheKey);
+    if (cachedData) {
+      return { ...cachedData, fromCache: true };
+    }
+
+    const client = await pool.connect();
+    try {
+      const fleetResult = await client.query(
+        "SELECT fleet_id FROM fleets WHERE fleet_id = $1",
+        [fleetId],
+      );
+
+      if (fleetResult.rows.length === 0) {
+        return { error: "Fleet not found" };
+      }
+
+      const result = await client.query(`
+        SELECT 
+          v.vin, v.manufacturer, v.fleet_id, v.registration_status,
+          f.fleet_type, f.owner_id
+        FROM vehicles v
+        LEFT JOIN fleets f ON v.fleet_id = f.fleet_id
+        WHERE v.fleet_id = $1
+        ORDER BY v.vin
+      `, [fleetId]);
+
+      const vehiclesData = {
+        fleetId: fleetId,
+        vehicles: result.rows.map((row) => ({
+          vin: row.vin,
+          manufacturer: row.manufacturer,
+          fleetId: row.fleet_id,
+          registrationStatus: row.registration_status,
+          fleetType: row.fleet_type,
+          ownerId: row.owner_id,
+        })),
+        fromCache: false,
+      };
+
+      // Cache for 10 minutes
+      await this.cache.set(cacheKey, vehiclesData, 600);
+
+      return vehiclesData;
+    } catch (error) {
+      console.error("Error getting vehicles by fleet:", error);
+      return { error: "Failed to get vehicles for fleet" };
     } finally {
       client.release();
     }

@@ -221,4 +221,33 @@ router.post("/vehicle/:vehicleVin/reset-rate-limit", async function (req: any, r
   }
 });
 
+// Get sliding window rate limit statistics for a specific vehicle
+router.get("/ratelimit/sliding-window/:vehicleVin", async function (req: any, res: any) {
+  try {
+    const vehicleVin = parseInt(req.params.vehicleVin);
+    const endpoint = req.query.endpoint as string;
+
+    if (isNaN(vehicleVin)) {
+      return res.status(400).json({ error: "Invalid vehicle VIN" });
+    }
+
+    const stats = await RateLimitMonitor.getSlidingWindowStats(vehicleVin, endpoint);
+    res.json(stats);
+  } catch (error) {
+    console.error("Error getting sliding window stats:", error);
+    res.status(500).json({ error: "Failed to get sliding window statistics" });
+  }
+});
+
+// Get global sliding window statistics
+router.get("/ratelimit/sliding-window", async function (req: any, res: any) {
+  try {
+    const stats = await RateLimitMonitor.getGlobalSlidingWindowStats();
+    res.json(stats);
+  } catch (error) {
+    console.error("Error getting global sliding window stats:", error);
+    res.status(500).json({ error: "Failed to get global sliding window statistics" });
+  }
+});
+
 export default router;

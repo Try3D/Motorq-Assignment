@@ -17,7 +17,7 @@ const VEHICLE_API_KEY = "veh_1_abc123def456789";
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          vehicleVin: 40, // Vehicle ID we're provisioning
+          vehicleVin: 40,
           technicianId: "TECH_001",
         }),
       },
@@ -74,7 +74,8 @@ const VEHICLE_API_KEY = "veh_1_abc123def456789";
       engineStatus: "On",
       fuel: parseFloat(fuel.toFixed(2)),
       totalKm: parseFloat(totalKm.toFixed(2)),
-      vehicleId: 40, // MUST match the provisioned vehicle ID
+      // Ensure unique timestamps by adding milliseconds
+      timestamp: new Date(Date.now() + i).toISOString(),
     };
 
     try {
@@ -101,13 +102,13 @@ const VEHICLE_API_KEY = "veh_1_abc123def456789";
           time: new Date().toISOString(),
           requestNumber: requestCount,
           rateLimitHeaders: {
-            limit: telemetryJson.headers.get('X-RateLimit-Limit'),
-            remaining: telemetryJson.headers.get('X-RateLimit-Remaining'),
-            reset: telemetryJson.headers.get('X-RateLimit-Reset'),
-          }
+            limit: telemetryJson.headers.get("X-RateLimit-Limit"),
+            remaining: telemetryJson.headers.get("X-RateLimit-Remaining"),
+            reset: telemetryJson.headers.get("X-RateLimit-Reset"),
+          },
+          duplicate: response.msg?.includes('duplicate') || false,
         });
       } else if (telemetryJson.status === 429) {
-        // Rate limited
         rateLimitedCount++;
         console.warn("⚠️  Rate limited:", {
           error: response.error,
@@ -117,11 +118,10 @@ const VEHICLE_API_KEY = "veh_1_abc123def456789";
           requestNumber: requestCount,
         });
 
-        // Wait for the suggested retry time plus a small buffer
         const retryDelay = (response.retryAfter || 60) * 1000 + 1000;
         console.log(`⏳ Waiting ${retryDelay / 1000} seconds before retry...`);
         await sleep(retryDelay);
-        continue; // Don't increment i, retry this request
+        continue;
       } else {
         console.error("❌ Telemetry failed:", response);
 
