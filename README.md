@@ -1,6 +1,6 @@
 # MotorQ Fleet Management System
 
-A robust, scalable, and high-performance fleet management and vehicle telemetry platform built with TypeScript, Express, PostgreSQL, and Redis. Designed for real-time tracking, smart alerting, secure ingestion, and fleet-wide analytics, the system supports high-throughput operations and background processing.
+A robust fleet management and vehicle telemetry platform built with TypeScript, Express, PostgreSQL, and Redis. Designed for real-time tracking, alerts, secure ingestion, and fleet-wide analytics.
 
 ---
 
@@ -13,18 +13,10 @@ A robust, scalable, and high-performance fleet management and vehicle telemetry 
 - **Automated Alerting**: Detects and notifies for speed violations, low fuel, engine issues, and maintenance events.
 - **Redis Caching Layer**: TTL-based caching for analytics, telemetry, and alert data.
 - **Administrative APIs**: Provisioning, cache management, authentication status, and alert resolution.
-- **Extensive Test Coverage**: Includes middleware, services, and utility tests with coverage reporting.
 
 ---
 
 ## System Architecture
-
-### Core Services
-
-- `MotorqService`: Central orchestration layer for core business logic.
-- `AlertComputationService`: Periodic analysis engine for triggering alerts.
-- `CacheService`: Singleton abstraction over Redis.
-- `BackgroundJobService`: Manages non-blocking background tasks.
 
 ### PostgreSQL Schema Overview
 
@@ -102,8 +94,6 @@ motorqts/
 
 - Node.js v18+
 - Docker & Docker Compose
-- PostgreSQL 16
-- Redis 7
 
 ### Installation
 
@@ -125,10 +115,7 @@ docker compose up -d
 # 5. Initialize the database schema
 npm run init-db
 
-# 6. Verify database connection
-npm run check-db
-
-# 7. Start the application
+# 6. Start the application
 npm run dev
 ```
 
@@ -264,36 +251,14 @@ npm run coverage        # Test with coverage report
 
 ---
 
-## Monitoring
-
-- `GET /status`: Background worker and cache status
-- `GET /admin/cache/stats`: Redis performance metrics
-- `GET /admin/vehicles/top-requesters`: Request volume insights
-- `GET /admin/vehicle/:vin/rate-stats`: Per-vehicle rate limit usage
-
----
-
-## Production Considerations
-
-- **Horizontal scalability** (stateless app layer)
-- **PostgreSQL connection pooling** (max 20 connections)
-- **Graceful shutdown** for jobs and services
-- **Built-in health endpoints** for orchestration
-- **Strategic caching** with automatic TTL expiration
-
----
-
 ## Docker Deployment
 
 ```bash
+# Build image
+docker build -t motorq .
+
 # Start complete stack
-docker compose up -d
-
-# View logs
-docker compose logs -f
-
-# Scale services
-docker compose up -d --scale app=3
+docker run motorq
 ```
 
 ---
@@ -321,19 +286,4 @@ NODE_ENV=production
 ## Future Work
 
 - WebSocket support for real-time telemetry streams
-- Predictive maintenance using machine learning
-- Multi-tenant fleet segregation
-- Mobile application support
-- Advanced anomaly detection for vehicle behavior
-
----
-
-## License
-
-MIT License - see LICENSE file for details
-
----
-
-**Built with ❤️ using TypeScript, Express, PostgreSQL, and Redis**
-
-*Developed as part of a high-performance telemetry platform prototype for modern fleet operations.*
+- Anomaly detection using machine learning
