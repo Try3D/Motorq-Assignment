@@ -67,7 +67,6 @@ async function initDatabase() {
       )
     `);
 
-    // Add vehicle authentication table
     await client.query(`
       CREATE TABLE IF NOT EXISTS vehicle_auth (
         id SERIAL PRIMARY KEY,
@@ -85,7 +84,6 @@ async function initDatabase() {
       )
     `);
 
-    // Add admin users table for fleet operators
     await client.query(`
       CREATE TABLE IF NOT EXISTS admin_users (
         id SERIAL PRIMARY KEY,
@@ -97,7 +95,6 @@ async function initDatabase() {
       )
     `);
 
-    // Add vehicle request logs table for rate limiting
     await client.query(`
       CREATE TABLE IF NOT EXISTS vehicle_request_logs (
         id SERIAL PRIMARY KEY,
@@ -109,21 +106,18 @@ async function initDatabase() {
       )
     `);
 
-    // Add index for efficient rate limiting queries
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_vehicle_request_logs_vin_timestamp 
       ON vehicle_request_logs(vehicle_vin, timestamp DESC)
     `);
 
-    // Add index for cleanup queries
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_vehicle_request_logs_timestamp 
       ON vehicle_request_logs(timestamp)
     `);
 
     console.log("✅ Database tables created successfully!");
-    
-    // Verify the vehicle_request_logs table was created
+
     const tableCheck = await client.query(`
       SELECT EXISTS (
         SELECT FROM information_schema.tables 
@@ -131,13 +125,12 @@ async function initDatabase() {
         AND table_name = 'vehicle_request_logs'
       )
     `);
-    
+
     if (tableCheck.rows[0].exists) {
       console.log("✅ vehicle_request_logs table verified");
     } else {
       console.log("❌ vehicle_request_logs table NOT found");
     }
-
   } catch (error) {
     console.error("❌ Error creating tables:", error);
   } finally {

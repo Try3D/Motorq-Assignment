@@ -1,15 +1,14 @@
 import request from "supertest";
 import express from "express";
 
-// Create isolated test app without background services
 const createTestApp = () => {
   const app = express();
   app.use(express.json());
-  
+
   app.get("/", (req, res) => {
     res.send("Hello, world!");
   });
-  
+
   return app;
 };
 
