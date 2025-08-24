@@ -1,4 +1,4 @@
-# MotorQ Fleet Management System
+# Fleet Management System
 
 A robust fleet management and vehicle telemetry platform built with TypeScript, Express, PostgreSQL, and Redis. Designed for real-time tracking, alerts, secure ingestion, and fleet-wide analytics.
 
